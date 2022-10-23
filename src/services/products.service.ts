@@ -12,10 +12,8 @@ export class ProductService implements IProduct {
     public async getStocksLevel(sku: string): Promise<{ sku: string, qty: number }> {
         await this.initStocksAnsTransactions();
         const stock: IStocks = this.stocks.find((stock: IStocks) => stock.sku === sku);
-        if(!stock) throw new Error('stock not found');
-
         const transactions: ITransaction[] = this.transactions.filter((transaction: ITransaction) => transaction.sku === sku);
-        if(!transactions?.length) throw new Error('transactions not found');
+        if(!transactions?.length && !stock) throw new Error('sku not found');
 
         const refundTransactions: number = transactions
                                     .filter((transaction: ITransaction) => transaction.type === TransactionTypes.REFUND)
@@ -23,7 +21,7 @@ export class ProductService implements IProduct {
         const orderedTransactions: number = transactions
                                     .filter((transaction: ITransaction) => transaction.type === TransactionTypes.ORDER)
                                     .reduce((partialSum, a) => partialSum + a?.qty, 0);
-        const totalStocks: number = (stock.stock + refundTransactions) - orderedTransactions;
+        const totalStocks: number = ((stock?.stock || 0) + refundTransactions) - orderedTransactions;
 
         return {
             qty: totalStocks, 
