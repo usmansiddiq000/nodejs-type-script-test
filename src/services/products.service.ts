@@ -1,18 +1,14 @@
 import { IProduct, IStocks, ITransaction } from "../models";
-import { promises as fsPromises } from 'fs';
+import { promises as fsPromises, createReadStream } from 'fs';
 import * as path from 'path';
 import { TransactionTypes } from "../constants";
 
 export class ProductService implements IProduct {
-    private stocks: IStocks[];
-    private transactions: ITransaction[];
-
     constructor() {}
 
     public async getStocksLevel(sku: string): Promise<{ sku: string, qty: number }> {
-        await this.initStocksAnsTransactions();
-        const stock: IStocks = this.stocks.find((stock: IStocks) => stock.sku === sku);
-        const transactions: ITransaction[] = this.transactions.filter((transaction: ITransaction) => transaction.sku === sku);
+        const stock: IStocks = await this.getstock(sku);
+        const transactions: ITransaction[] = await this.getTransactions(sku);
         if(!transactions?.length && !stock) throw new Error('sku not found');
 
         const refundTransactions: number = transactions
@@ -29,25 +25,41 @@ export class ProductService implements IProduct {
         }
     }
 
-    private async initStocksAnsTransactions() {
-        this.stocks = await this.getstocks();
-        this.transactions = await this.getTransactions();
+    private getstock(sku: string): Promise<IStocks> {
+        return new Promise((resolve, reject) => {
+            const stocksData = [];
+            const readStream = createReadStream(path.join(__dirname, '../test/mocks/stock.json'));
+            readStream.on('data', function(data) {
+                stocksData.push(data);
+            }); 
+            readStream.on('end', function() {
+                const stocks = JSON.parse(Buffer.concat(stocksData).toString());
+                const stock = stocks.
+                find((s: IStocks) => s.sku === sku)
+                resolve(stock)
+            })
+            readStream.on('error', function() {
+                reject ('Something went wrong')
+            }); 
+        })
     }
 
-    private async getstocks() {
-        try {
-            return JSON.parse(await fsPromises.readFile(path.join(__dirname, '../test/mocks/stock.json'), { encoding: 'utf-8' }))
-        } catch(error) {
-            console.log(error)
-        }
-    }
-
-    private async getTransactions() {
-        try {
-            return JSON.parse(await fsPromises.readFile(path.join(__dirname, '../test/mocks/transactions.json'), { encoding: 'utf-8' }))
-        } catch(error) {
-            console.log(error)
-        }
+    private async getTransactions(sku: string): Promise<ITransaction[]> {
+        return new Promise((resolve, reject) => {
+            const transactionsString = [];
+            const readStream = createReadStream(path.join(__dirname, '../test/mocks/transactions.json'));
+            readStream.on('data', function(data) {
+                transactionsString.push(data)
+            }); 
+            readStream.on('end', function() { 
+                const transactions = JSON.parse(Buffer.concat(transactionsString).toString());
+                const stockTransaction = transactions.filter((transaction: ITransaction) => transaction.sku === sku);
+                resolve(stockTransaction)
+            })
+            readStream.on('error', function() {
+                reject ('Something went wrong')
+            }); 
+        })
     }
 
 }
